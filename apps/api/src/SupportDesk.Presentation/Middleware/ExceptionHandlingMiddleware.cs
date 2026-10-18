@@ -48,6 +48,11 @@ public sealed class ExceptionHandlingMiddleware(
             await WriteAsync(context, Problem("Conflict", exception.Message, StatusCodes.Status409Conflict),
                 StatusCodes.Status409Conflict);
         }
+        catch (UnauthorizedException exception)
+        {
+            await WriteAsync(context, Problem("Unauthorized", exception.Message, StatusCodes.Status401Unauthorized),
+                StatusCodes.Status401Unauthorized);
+        }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             // The caller went away; nothing to report.

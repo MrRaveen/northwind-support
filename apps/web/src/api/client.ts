@@ -1,5 +1,5 @@
 import type { ProblemDetails } from '../types/api';
-
+import { clearSession, getSession } from './session';
 /**
  * Where the API lives. In development this stays '/api' and the Vite dev server proxies it
  * to the backend; set VITE_API_BASE_URL to point a build somewhere else. See .env.example.
@@ -29,23 +29,44 @@ export class ApiError extends Error {
  * The single place that talks to the API. Returns parsed JSON, or throws an
  * {@link ApiError} that callers can show to the user.
  */
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestOptions {
+  /** Send no token, and do not treat a 401 as an expired session (used by login). */
+  anonymous?: boolean;
+}
+
+/**
+ * The single place that talks to the API. Attaches the token, returns parsed JSON, or throws an
+ * {@link ApiError}. A 401 on a signed-in call ends the session, which sends the user to /login.
+ */
+export async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options: RequestOptions = {},
+): Promise<T> {
+  const token = options.anonymous ? undefined : getSession()?.token;
+
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
+  if (response.status === 401 && !options.anonymous) {
+    clearSession();
+  }
+
   if (!response.ok) {
     const problem = await readProblem(response);
 
-    throw new ApiError(
-      response.status,
-      problem?.detail ?? problem?.title ?? response.statusText,
-      problem,
-    );
+    const message =
+      response.status === 401 && !options.anonymous
+        ? 'Your session has expired. Please sign in again.'
+        : (problem?.detail ?? problem?.title ?? response.statusText);
+
+    throw new ApiError(response.status, message, problem);
   }
 
   if (response.status === 204) {

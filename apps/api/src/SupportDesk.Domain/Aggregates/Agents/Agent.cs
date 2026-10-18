@@ -38,7 +38,16 @@ public sealed class Agent : AggregateRoot
     public int MaxOpenTickets { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
+    
+    /// <summary>Salted hash of the agent's password. Never the password itself.</summary>
+    public string? PasswordHash { get; private set; }
 
+    public void SetPasswordHash(string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+
+        PasswordHash = passwordHash;
+    }
     /// <summary>The ticket categories this agent is qualified for.</summary>
     public IReadOnlyCollection<AgentSpecialization> Specializations => _specializations;
 

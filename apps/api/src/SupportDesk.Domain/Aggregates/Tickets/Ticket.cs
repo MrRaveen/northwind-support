@@ -107,10 +107,10 @@ public sealed class Ticket : AggregateRoot
 
     public void AssignTo(int? agentId, DateTime nowUtc)
     {
-        if (Status == TicketStatus.Closed)
+        if (Status is TicketStatus.Resolved or TicketStatus.Closed)
         {
             throw new BusinessRuleViolationException(
-                $"Ticket {Reference} is closed and cannot be reassigned.");
+                $"Ticket {Reference} is {Status} and cannot be reassigned.");
         }
 
         AssignedAgentId = agentId;

@@ -11,8 +11,9 @@ namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
 public class EscalateTicketCommandHandlerTests
 {
     private const string Reason = "Customer reports production impact";
+    private const string DefaultActor = "alex.lead";
 
-    private static EscalateTicketRequest Request(string reason = Reason, string by = "alex.lead") => new(reason, by);
+    private static EscalateTicketRequest Request(string reason = Reason) => new(reason);
 
     private static void WithAgents(TicketCommandTestContext context, params AgentDto[] agents) =>
         context.AgentQueries
@@ -32,7 +33,7 @@ public class EscalateTicketCommandHandlerTests
         var context = new TicketCommandTestContext();
 
         var exception = await Assert.ThrowsAsync<NotFoundException>(
-            () => context.EscalateTicket.HandleAsync(999, Request(), CancellationToken.None));
+            () => context.EscalateTicket.HandleAsync(999, Request(), DefaultActor, CancellationToken.None));
 
         Assert.Contains("Ticket", exception.Message);
         context.VerifySaved(Times.Never());
@@ -45,7 +46,7 @@ public class EscalateTicketCommandHandlerTests
         var ticket = context.ExistingTicket(new TicketBuilder().WithPriority(TicketPriority.Critical).Build());
 
         var exception = await Assert.ThrowsAsync<BusinessRuleViolationException>(
-            () => context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None));
+            () => context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None));
 
         Assert.Contains("Critical", exception.Message);
         Assert.Empty(ticket.Escalations);
@@ -61,7 +62,7 @@ public class EscalateTicketCommandHandlerTests
         var ticket = context.ExistingTicket(new TicketBuilder().WithStatus(status).Build());
 
         var exception = await Assert.ThrowsAsync<BusinessRuleViolationException>(
-            () => context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None));
+            () => context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None));
 
         Assert.Contains(status.ToString(), exception.Message);
         Assert.Empty(ticket.Escalations);
@@ -79,7 +80,7 @@ public class EscalateTicketCommandHandlerTests
         var context = new TicketCommandTestContext();
         var ticket = context.ExistingTicket(new TicketBuilder().WithPriority(before).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Equal(after, ticket.Priority);
         context.VerifySaved(Times.Once());
@@ -92,7 +93,7 @@ public class EscalateTicketCommandHandlerTests
         var ticket = context.ExistingTicket(new TicketBuilder().WithPriority(TicketPriority.Medium).Build());
         context.Clock.Advance(TimeSpan.FromHours(5));
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         // High is 8h for a Standard customer, counted from now, not from when the ticket was raised.
         Assert.Equal(context.Clock.UtcNow.AddHours(8), ticket.DueAtUtc);
@@ -107,7 +108,7 @@ public class EscalateTicketCommandHandlerTests
         WithPremiumCustomer(context);
         var ticket = context.ExistingTicket(new TicketBuilder().WithPriority(TicketPriority.Low).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         // Low becomes Medium: 24h, halved for Premium.
         Assert.Equal(context.Clock.UtcNow.AddHours(12), ticket.DueAtUtc);
@@ -124,7 +125,7 @@ public class EscalateTicketCommandHandlerTests
             AgentDtoFactory.Create(4, open: 2)); // fewer tickets, but the current owner stays
         var ticket = context.ExistingTicket(new TicketBuilder().AssignedTo(3).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Equal(3, ticket.AssignedAgentId);
         var row = Assert.Single(ticket.Escalations);
@@ -141,7 +142,7 @@ public class EscalateTicketCommandHandlerTests
             AgentDtoFactory.Create(4, open: 2, max: 6));
         var ticket = context.ExistingTicket(new TicketBuilder().AssignedTo(5).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Equal(5, ticket.AssignedAgentId);
     }
@@ -156,7 +157,7 @@ public class EscalateTicketCommandHandlerTests
             AgentDtoFactory.Create(4, open: 2));
         var ticket = context.ExistingTicket(new TicketBuilder().AssignedTo(1).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Equal(4, ticket.AssignedAgentId);
         var row = Assert.Single(ticket.Escalations);
@@ -173,7 +174,7 @@ public class EscalateTicketCommandHandlerTests
             AgentDtoFactory.Create(4, open: 2));
         var ticket = context.ExistingTicket(new TicketBuilder().Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Equal(4, ticket.AssignedAgentId);
         Assert.Null(Assert.Single(ticket.Escalations).FromAgentId);
@@ -186,7 +187,7 @@ public class EscalateTicketCommandHandlerTests
         WithAgents(context, AgentDtoFactory.Create(1, open: 0, active: false));
         var ticket = context.ExistingTicket(new TicketBuilder().AssignedTo(1).Build());
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(), DefaultActor, CancellationToken.None);
 
         Assert.Null(ticket.AssignedAgentId);
         Assert.Equal(TicketPriority.High, ticket.Priority); // still escalated
@@ -202,7 +203,7 @@ public class EscalateTicketCommandHandlerTests
         var ticket = context.ExistingTicket(new TicketBuilder().WithPriority(TicketPriority.Medium).AssignedTo(3).Build());
         context.Clock.Advance(TimeSpan.FromHours(2));
 
-        await context.EscalateTicket.HandleAsync(ticket.Id, Request(Reason, "ben.osei"), CancellationToken.None);
+        await context.EscalateTicket.HandleAsync(ticket.Id, Request(Reason), "ben.osei", CancellationToken.None);
 
         var row = Assert.Single(ticket.Escalations);
         Assert.Equal(TicketPriority.Medium, row.FromPriority);
@@ -210,7 +211,7 @@ public class EscalateTicketCommandHandlerTests
         Assert.Equal(Reason, row.Reason);
         Assert.Equal("ben.osei", row.EscalatedBy);
         Assert.Equal(context.Clock.UtcNow, row.EscalatedAtUtc);
-        Assert.Null(row.FromDueAtUtc); // the builder's ticket had no due date
+        Assert.Null(row.FromDueAtUtc);
         Assert.Equal(ticket.DueAtUtc, row.ToDueAtUtc);
         context.VerifySaved(Times.Once());
     }

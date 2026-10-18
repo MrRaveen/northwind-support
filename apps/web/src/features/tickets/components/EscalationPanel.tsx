@@ -11,14 +11,11 @@ interface EscalationPanelProps {
 
 export function EscalationPanel({ ticket, onUpdated }: EscalationPanelProps) {
     const [reason, setReason] = useState('');
-    const [escalatedBy, setEscalatedBy] = useState(''); // Will be replaced by Auth token in Task 3
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string>();
 
     const cannotBeEscalated =
-        ticket.priority === 'Critical' ||
-        ticket.status === 'Resolved' ||
-        ticket.status === 'Closed';
+        ticket.priority === 'Critical' || ticket.status === 'Resolved' || ticket.status === 'Closed';
 
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -27,18 +24,13 @@ export function EscalationPanel({ ticket, onUpdated }: EscalationPanelProps) {
             setError('Reason must be between 5 and 500 characters.');
             return;
         }
-        if (!escalatedBy.trim()) {
-            setError('You must provide your name/handle.');
-            return;
-        }
 
         setIsSaving(true);
         setError(undefined);
 
         try {
-            const updatedTicket = await ticketsApi.escalate(ticket.id, reason, escalatedBy);
+            const updatedTicket = await ticketsApi.escalate(ticket.id, reason.trim());
             setReason('');
-            setEscalatedBy('');
             onUpdated(updatedTicket);
         } catch (caught) {
             if (caught instanceof ApiError && caught.status === 409) {
@@ -57,11 +49,17 @@ export function EscalationPanel({ ticket, onUpdated }: EscalationPanelProps) {
 
             {cannotBeEscalated && (
                 <p className="field__hint" style={{ marginBottom: '12px' }}>
-                    This ticket cannot be escalated because it is already {ticket.priority === 'Critical' ? 'Critical' : ticket.status}.
+                    This ticket cannot be escalated because it is already{' '}
+                    {ticket.priority === 'Critical' ? 'Critical' : ticket.status}.
                 </p>
             )}
 
-            <Field id="escalate-reason" label="Reason for escalation" error={error}>
+            <Field
+                id="escalate-reason"
+                label="Reason for escalation"
+                error={error}
+                hint="Recorded under your name."
+            >
                 {(fieldProps) => (
                     <textarea
                         {...fieldProps}
@@ -70,19 +68,6 @@ export function EscalationPanel({ ticket, onUpdated }: EscalationPanelProps) {
                         disabled={cannotBeEscalated || isSaving}
                         placeholder="Why is this SLA at risk? (5-500 chars)"
                         onChange={(e) => setReason(e.target.value)}
-                    />
-                )}
-            </Field>
-
-            <Field id="escalate-by" label="Escalated by (Temp for Task 2)">
-                {(fieldProps) => (
-                    <input
-                        {...fieldProps}
-                        type="text"
-                        value={escalatedBy}
-                        disabled={cannotBeEscalated || isSaving}
-                        placeholder="e.g. alex.lead"
-                        onChange={(e) => setEscalatedBy(e.target.value)}
                     />
                 )}
             </Field>

@@ -12,6 +12,8 @@ using SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 using SupportDesk.Application.Features.Tickets.Services;
+using SupportDesk.Application.Features.Auth.Commands.Login;
+using SupportDesk.Application.Features.Auth.Queries.GetCurrentUser;
 
 namespace SupportDesk.Application;
 
@@ -36,7 +38,8 @@ public static class DependencyInjection
         services.AddScoped<GetCategoriesQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
-
+        services.AddScoped<LoginCommandHandler>();
+        services.AddScoped<GetCurrentUserQueryHandler>();
         return services;
     }
 }

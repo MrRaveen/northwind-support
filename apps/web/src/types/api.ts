@@ -174,3 +174,22 @@ export interface TicketEscalation {
   escalatedBy: string;
   escalatedAtUtc: string;
 }
+
+export interface CurrentUser {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  expiresAtUtc: string;
+  user: CurrentUser;
+}
+
+

@@ -17,7 +17,8 @@ public sealed class EscalateTicketCommandHandler(
     IClock clock,
     GetTicketQueryHandler getTicket)
 {
-    public async Task<TicketDetailDto> HandleAsync(int id, EscalateTicketRequest request, CancellationToken ct)
+        public async Task<TicketDetailDto> HandleAsync(
+        int id, EscalateTicketRequest request, string escalatedBy, CancellationToken ct)
     {
         var ticket = await tickets.GetByIdAsync(id, ct)
             ?? throw new NotFoundException("Ticket", id);
@@ -39,7 +40,7 @@ public sealed class EscalateTicketCommandHandler(
 
         ticket.Escalate(
             request.Reason,
-            request.EscalatedBy,
+            escalatedBy,
             triage.DueAtUtc,
             triage.AssignedAgentId,
             clock.UtcNow);

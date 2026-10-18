@@ -20,6 +20,8 @@ public sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
         builder.Property(a => a.CreatedAtUtc).HasColumnType("datetime2(3)");
 
         builder.HasIndex(a => a.Email).IsUnique().HasDatabaseName("UQ_Agents_Email");
+        
+        builder.Property(a => a.PasswordHash).HasMaxLength(256);
 
         builder.HasMany(a => a.Specializations)
             .WithOne()
