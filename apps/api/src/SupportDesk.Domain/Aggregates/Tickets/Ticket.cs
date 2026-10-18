@@ -7,18 +7,14 @@ namespace SupportDesk.Domain.Aggregates.Tickets;
 /// A support request raised by a customer. Every change to a ticket goes through one of its
 /// methods, so its rules cannot be bypassed.
 /// </summary>
-/// <remarks>
-/// The customer, the category and the assigned agent are other aggregates and are referenced
-/// by id only.
-/// </remarks>
 public sealed class Ticket : AggregateRoot
 {
+    private readonly List<TicketEscalation> _escalations = [];
     private Ticket()
     {
         // For EF Core.
     }
 
-    /// <summary>Human-friendly identifier shown to customers, e.g. TCK-0042.</summary>
     public string Reference { get; private set; } = string.Empty;
 
     public string Title { get; private set; } = string.Empty;
@@ -29,7 +25,6 @@ public sealed class Ticket : AggregateRoot
 
     public int CategoryId { get; private set; }
 
-    /// <summary>Null while the ticket is waiting for an owner.</summary>
     public int? AssignedAgentId { get; private set; }
 
     public TicketPriority Priority { get; private set; }
@@ -40,17 +35,23 @@ public sealed class Ticket : AggregateRoot
 
     public DateTime UpdatedAtUtc { get; private set; }
 
-    /// <summary>When the team has committed to responding by. Null when no SLA applies.</summary>
     public DateTime? DueAtUtc { get; private set; }
 
     public DateTime? ResolvedAtUtc { get; private set; }
 
-    /// <summary>True while the ticket still needs work from an agent.</summary>
     public bool IsOpen => Status is not (TicketStatus.Resolved or TicketStatus.Closed);
 
+    public IReadOnlyCollection<TicketEscalation> Escalations => _escalations;
+
     /// <summary>
-    /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/>, with no
-    /// owner and no due date.
+    /// When the current SLA window started. Set to CreatedAtUtc on raise and reset to the
+    /// escalation time each time the ticket is escalated (because escalation recomputes DueAtUtc
+    /// from 'now', so the window size would be wrong if we still measured from CreatedAtUtc).
+    /// </summary>
+    public DateTime SlaWindowStartUtc { get; private set; }
+
+    /// <summary>
+    /// Raises a new ticket. Triage rules (assignee, due date, priority override) are applied here.
     /// </summary>
     public static Ticket Raise(
         string reference,
@@ -58,7 +59,10 @@ public sealed class Ticket : AggregateRoot
         string description,
         int customerId,
         int categoryId,
-        TicketPriority priority,
+        TicketPriority requestedPriority,
+        bool forcesCriticalPriority,
+        DateTime? dueAtUtc,
+        int? assignedAgentId,
         DateTime nowUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reference);
@@ -72,17 +76,16 @@ public sealed class Ticket : AggregateRoot
             Description = description.Trim(),
             CustomerId = customerId,
             CategoryId = categoryId,
-            Priority = priority,
+            Priority = forcesCriticalPriority ? TicketPriority.Critical : requestedPriority,
             Status = TicketStatus.New,
+            DueAtUtc = dueAtUtc,
+            AssignedAgentId = assignedAgentId,
             CreatedAtUtc = nowUtc,
-            UpdatedAtUtc = nowUtc
+            UpdatedAtUtc = nowUtc,
+            SlaWindowStartUtc = nowUtc
         };
     }
 
-    /// <summary>
-    /// Moves the ticket through its lifecycle, keeping the resolution timestamp in step.
-    /// </summary>
-    /// <exception cref="BusinessRuleViolationException">The ticket is closed.</exception>
     public void ChangeStatus(TicketStatus status, DateTime nowUtc)
     {
         if (Status == TicketStatus.Closed && status != TicketStatus.Closed)
@@ -102,13 +105,82 @@ public sealed class Ticket : AggregateRoot
         UpdatedAtUtc = nowUtc;
     }
 
-    /// <summary>
-    /// Hands the ticket to an agent, or takes it back off them when <paramref name="agentId"/>
-    /// is null. Whether the agent may take it is checked by the caller, which can see agents.
-    /// </summary>
     public void AssignTo(int? agentId, DateTime nowUtc)
     {
+        if (Status == TicketStatus.Closed)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is closed and cannot be reassigned.");
+        }
+
         AssignedAgentId = agentId;
         UpdatedAtUtc = nowUtc;
+    }
+
+    /// <summary>
+    /// Returns the priority one step above the current, or throws <see cref="BusinessRuleViolationException"/>
+    /// when the ticket is in a terminal state (Critical, Resolved, Closed). This is the single
+    /// source of truth for escalation guard rules and for callers that need the next priority
+    /// before actually escalating (e.g. to recompute SLA windows).
+    /// </summary>
+    public TicketPriority NextPriority()
+    {
+        if (Status is TicketStatus.Resolved or TicketStatus.Closed)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is already Critical and cannot be escalated further.");
+        }
+
+        return Priority switch
+        {
+            TicketPriority.Low => TicketPriority.Medium,
+            TicketPriority.Medium => TicketPriority.High,
+            TicketPriority.High => TicketPriority.Critical,
+            _ => TicketPriority.Critical
+        };
+    }
+
+    /// <summary>
+    /// Escalates the ticket (BR-7). Calls <see cref="NextPriority"/> — which enforces the guard
+    /// rules — then steps up priority, resets the SLA window, accepts recomputed due date and
+    /// agent, and records the immutable history row.
+    /// </summary>
+    public void Escalate(
+        string reason,
+        string escalatedBy,
+        DateTime newDueAtUtc,
+        int? newAgentId,
+        DateTime nowUtc)
+    {
+        // Guard rules are enforced in NextPriority; this also gives us the new priority.
+        var newPriority = NextPriority();
+
+        var oldPriority = Priority;
+        var oldAgentId = AssignedAgentId;
+        var oldDueAtUtc = DueAtUtc;
+
+        Priority = newPriority;
+        DueAtUtc = newDueAtUtc;
+        AssignedAgentId = newAgentId;
+        SlaWindowStartUtc = nowUtc; // restart the window so AtRisk % is correct after escalation
+        UpdatedAtUtc = nowUtc;
+
+        _escalations.Add(new TicketEscalation(
+            Id,
+            oldPriority,
+            Priority,
+            oldAgentId,
+            AssignedAgentId,
+            oldDueAtUtc,
+            DueAtUtc,
+            reason,
+            escalatedBy,
+            nowUtc));
     }
 }

@@ -170,20 +170,23 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
         foreach (var row in rows)
         {
             var createdAtUtc = now.AddMinutes(-row.CreatedMinutesAgo);
+            var category = categories[row.CategoryIndex - 1];
+            var assignedAgentId = row.AgentIndex is not null 
+                ? agents[row.AgentIndex.Value - 1].Id 
+                : (int?)null;
+            var dueAtUtc = createdAtUtc.AddMinutes(row.SlaWindowMinutes);
 
             var ticket = Ticket.Raise(
                 row.Reference,
                 row.Title,
                 row.Description,
                 customers[row.CustomerIndex - 1].Id,
-                categories[row.CategoryIndex - 1].Id,
+                category.Id,
                 row.Priority,
+                category.ForcesCriticalPriority,
+                dueAtUtc,
+                assignedAgentId,
                 createdAtUtc);
-
-            if (row.AgentIndex is not null)
-            {
-                ticket.AssignTo(agents[row.AgentIndex.Value - 1].Id, createdAtUtc);
-            }
 
             if (row.Status != TicketStatus.New)
             {
@@ -194,7 +197,7 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
             var entry = db.Add(ticket);
             entry.Property(t => t.UpdatedAtUtc).CurrentValue =
                 createdAtUtc.AddMinutes(row.ResolvedAfterMinutes ?? row.CreatedMinutesAgo / 2);
-            entry.Property(t => t.DueAtUtc).CurrentValue = createdAtUtc.AddMinutes(row.SlaWindowMinutes);
+            entry.Property(t => t.DueAtUtc).CurrentValue = dueAtUtc;
         }
     }
 

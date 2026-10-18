@@ -33,6 +33,18 @@ export function CreateTicketPage() {
           <p>
             Raised <strong>{created.reference}</strong> for {created.customer.name}.
           </p>
+
+          {created.triage && (
+            <div style={{ marginTop: '16px', marginBottom: '24px', padding: '16px', background: '#f9f9f9', borderRadius: '6px' }}>
+              <h3 style={{ marginTop: 0 }}>Triage Decision</h3>
+              <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                <li><strong>Priority:</strong> {created.triage.appliedPriority} <em>({created.triage.priorityReason})</em></li>
+                <li><strong>SLA Window:</strong> {created.triage.slaWindowHours} hours <em>({created.triage.slaReason})</em></li>
+                <li><strong>Assigned Agent:</strong> {created.assignedAgent?.fullName ?? 'Unassigned'} <em>({created.triage.assignmentReason})</em></li>
+              </ul>
+            </div>
+          )}
+
           <div className="button-row">
             <button
               type="button"

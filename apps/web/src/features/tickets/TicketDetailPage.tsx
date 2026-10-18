@@ -6,6 +6,9 @@ import { AssignAgentControl } from './components/AssignAgentControl';
 import { StatusActions } from './components/StatusActions';
 import { TicketSummary } from './components/TicketSummary';
 import { useTicket } from './hooks/useTicket';
+import { EscalationPanel } from './components/EscalationPanel';
+import { EscalationHistory } from './components/EscalationHistory';
+import type { TicketDetail } from '../../types/api';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +20,34 @@ export function TicketDetailPage() {
   if (Number.isNaN(ticketId)) {
     return <ErrorMessage message="That is not a valid ticket reference." />;
   }
+
+  // Intercept the API update to locally adjust agent ticket counts
+  const handleTicketUpdated = (updatedTicket: TicketDetail) => {
+    setData(updatedTicket);
+
+    if (reference.data && ticket) {
+      const wasOpen = ticket.status !== 'Resolved' && ticket.status !== 'Closed';
+      const isOpen = updatedTicket.status !== 'Resolved' && updatedTicket.status !== 'Closed';
+
+      const oldAgentId = ticket.assignedAgent?.id;
+      const newAgentId = updatedTicket.assignedAgent?.id;
+
+      const updatedAgents = reference.data.agents.map((agent) => {
+        let countChange = 0;
+
+        // The old agent loses the ticket (if it was previously open)
+        if (wasOpen && oldAgentId === agent.id) countChange -= 1;
+
+        // The new agent gains the ticket (if it is currently open)
+        if (isOpen && newAgentId === agent.id) countChange += 1;
+
+        if (countChange === 0) return agent;
+        return { ...agent, openTicketCount: agent.openTicketCount + countChange };
+      });
+
+      reference.setData({ ...reference.data, agents: updatedAgents });
+    }
+  };
 
   if (isLoading && !ticket) {
     return <Spinner label="Loading ticket" />;
@@ -50,16 +81,22 @@ export function TicketDetailPage() {
             <p className="description">{ticket.description}</p>
           </div>
 
-          <StatusActions ticket={ticket} onUpdated={setData} />
+          {/* Wire the new handler to the components that mutate state */}
+          <StatusActions ticket={ticket} onUpdated={handleTicketUpdated} />
+
+          <EscalationPanel ticket={ticket} onUpdated={handleTicketUpdated} />
+
+          <EscalationHistory ticketId={ticket.id} lastUpdatedUtc={ticket.updatedAtUtc} />
         </div>
 
         <aside className="detail-layout__side">
           <TicketSummary ticket={ticket} />
 
+          {/* Wire the new handler to the components that mutate state */}
           <AssignAgentControl
             ticket={ticket}
             agents={reference.data?.agents ?? []}
-            onUpdated={setData}
+            onUpdated={handleTicketUpdated}
           />
         </aside>
       </div>

@@ -6,10 +6,44 @@ namespace SupportDesk.Domain.Aggregates.Tickets;
 /// </summary>
 public static class SlaEvaluator
 {
-    public static SlaStatus Evaluate(DateTime? dueAtUtc, DateTime? resolvedAtUtc, DateTime nowUtc) =>
-        dueAtUtc is null ? SlaStatus.NotApplicable
-        : resolvedAtUtc is not null
-            ? (resolvedAtUtc <= dueAtUtc ? SlaStatus.Met : SlaStatus.Breached)
-        : nowUtc > dueAtUtc ? SlaStatus.Breached
-        : SlaStatus.WithinSla;
+    /// <summary>
+    /// Evaluates SLA status.
+    /// </summary>
+    /// <param name="windowStartUtc">When the current SLA window started (CreatedAtUtc on raise, or escalation time after escalation).</param>
+    /// <param name="dueAtUtc">When the ticket is due; null means no SLA applies.</param>
+    /// <param name="resolvedAtUtc">When the ticket was resolved; null if still open.</param>
+    /// <param name="nowUtc">The current time (injected so tests are deterministic).</param>
+    /// <param name="atRiskThreshold">Fraction of the window at which to switch to AtRisk, e.g. 0.25. Sourced from SlaOptions.AtRiskThresholdPercent / 100.0 by callers.</param>
+    public static SlaStatus Evaluate(
+        DateTime windowStartUtc,
+        DateTime? dueAtUtc,
+        DateTime? resolvedAtUtc,
+        DateTime nowUtc,
+        double atRiskThreshold = 0.25)
+    {
+        if (dueAtUtc is null)
+        {
+            return SlaStatus.NotApplicable;
+        }
+
+        if (resolvedAtUtc is not null)
+        {
+            return resolvedAtUtc <= dueAtUtc ? SlaStatus.Met : SlaStatus.Breached;
+        }
+
+        if (nowUtc > dueAtUtc)
+        {
+            return SlaStatus.Breached;
+        }
+
+        var windowDuration = dueAtUtc.Value - windowStartUtc;
+        var timeRemaining = dueAtUtc.Value - nowUtc;
+
+        if (timeRemaining <= windowDuration * atRiskThreshold)
+        {
+            return SlaStatus.AtRisk;
+        }
+
+        return SlaStatus.WithinSla;
+    }
 }

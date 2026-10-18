@@ -77,6 +77,8 @@ export function useTicketList() {
     filters.unassignedOnly,
     filters.page,
     filters.pageSize,
+    filters.slaStatus,
+    filters.page,
     filters.sortBy,
     filters.sortDirection,
   ]);

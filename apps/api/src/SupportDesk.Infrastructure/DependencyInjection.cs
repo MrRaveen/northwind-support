@@ -2,18 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Configuration;
 using SupportDesk.Domain.Repositories;
 using SupportDesk.Infrastructure.Data;
 using SupportDesk.Infrastructure.Queries;
 using SupportDesk.Infrastructure.Repositories;
 using SupportDesk.Infrastructure.Services;
+using SupportDesk.Domain.Aggregates.Tickets;
+using System.Linq;
 
 namespace SupportDesk.Infrastructure;
 
-/// <summary>
-/// Wires the domain's repositories and the application's abstractions to their SQL Server /
-/// system implementations.
-/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
@@ -26,6 +25,14 @@ public static class DependencyInjection
 
         services.AddDbContext<SupportDbContext>(options =>
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
+
+        // Bind and validate at startup: all four priorities must be present and positive.
+        services
+            .Configure<SlaOptions>(configuration.GetSection("Sla"))
+            .AddOptions<SlaOptions>()
+            .Bind(configuration.GetSection("Sla"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<SupportDbContext>());
 

@@ -41,6 +41,10 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
 
         builder.Property(t => t.ResolvedAtUtc).HasColumnType("datetime2(3)");
 
+        // BR-8: the window start is reset to now on each escalation so AtRisk % stays correct.
+        // Backfilled to CreatedAtUtc for existing rows (see migration).
+        builder.Property(t => t.SlaWindowStartUtc).HasColumnType("datetime2(3)");
+
         // A ticket is never silently detached from the rows that give it meaning.
         builder.HasOne<Customer>()
             .WithMany()
@@ -75,5 +79,13 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
             .HasFilter("[AssignedAgentId] IS NOT NULL");
 
         builder.HasIndex(t => t.DueAtUtc).HasDatabaseName("IX_Tickets_DueAtUtc");
+        // Add this to the end of TicketConfiguration.Configure
+        builder.HasMany(t => t.Escalations)
+            .WithOne()
+            .HasForeignKey(e => e.TicketId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Tell EF Core to read the private backing field
+        builder.Navigation(t => t.Escalations).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

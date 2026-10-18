@@ -16,7 +16,10 @@ export function StatusActions({ ticket, onUpdated }: StatusActionsProps) {
   const [pendingStatus, setPendingStatus] = useState<TicketStatus | undefined>();
   const [error, setError] = useState<string>();
 
+  const isClosed = ticket.status === 'Closed';
+
   const changeStatus = async (status: TicketStatus) => {
+    // ...
     setPendingStatus(status);
     setError(undefined);
 
@@ -34,19 +37,23 @@ export function StatusActions({ ticket, onUpdated }: StatusActionsProps) {
       <h2>Status</h2>
 
       <div className="button-row">
-        {statuses
-          .filter((status) => status !== ticket.status)
-          .map((status) => (
-            <button
-              key={status}
-              type="button"
-              className="button button--ghost"
-              disabled={pendingStatus !== undefined}
-              onClick={() => void changeStatus(status)}
-            >
-              {pendingStatus === status ? 'Saving...' : `Move to ${humanize(status)}`}
-            </button>
-          ))}
+        {isClosed ? (
+          <p className="field__hint">Closed tickets cannot transition to any other status.</p>
+        ) : (
+          statuses
+            .filter((status) => status !== ticket.status)
+            .map((status) => (
+              <button
+                key={status}
+                type="button"
+                className="button button--ghost"
+                disabled={pendingStatus !== undefined}
+                onClick={() => void changeStatus(status)}
+              >
+                {pendingStatus === status ? 'Saving...' : `Move to ${humanize(status)}`}
+              </button>
+            ))
+        )}
       </div>
 
       {error && (

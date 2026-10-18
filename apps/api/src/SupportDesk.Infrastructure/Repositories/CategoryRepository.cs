@@ -9,4 +9,7 @@ public sealed class CategoryRepository(SupportDbContext db) : ICategoryRepositor
 {
     public Task<bool> ExistsAsync(int id, CancellationToken ct) =>
         db.Set<Category>().AsNoTracking().AnyAsync(c => c.Id == id, ct);
+
+    public Task<Category?> GetByIdAsync(int id, CancellationToken ct) =>
+        db.Set<Category>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
 }
