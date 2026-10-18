@@ -1,5 +1,7 @@
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Exceptions;
+using SupportDesk.Domain.Aggregates.Tickets;
+using SupportDesk.Domain.Exceptions;
 using SupportDesk.UnitTests.TestDoubles;
 
 namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
@@ -47,6 +49,18 @@ public class AssignTicketCommandHandlerTests
 
         Assert.Contains("Yuki Tanaka", exception.Message);
         Assert.Null(ticket.AssignedAgentId);
+        context.VerifySaved(Times.Never());
+    }
+    [Fact]
+    public async Task HandleAsync_WhenTicketIsResolved_ThrowsAndDoesNotSave()
+    {
+        var context = new TicketCommandTestContext();
+        var ticket = context.ExistingTicket(new TicketBuilder().WithStatus(TicketStatus.Resolved).AssignedTo(1).Build());
+        context.ExistingAgent(id: 2, fullName: "Ben Osei");
+
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
+            context.AssignTicket.HandleAsync(ticket.Id, new AssignTicketRequest(2), CancellationToken.None));
+
         context.VerifySaved(Times.Never());
     }
 }

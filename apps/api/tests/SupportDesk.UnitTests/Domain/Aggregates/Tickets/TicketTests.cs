@@ -104,4 +104,16 @@ public class TicketTests
         Assert.Null(ticket.AssignedAgentId);
         Assert.Equal(Later, ticket.UpdatedAtUtc);
     }
+    [Theory]
+    [InlineData(TicketStatus.Resolved)]
+    [InlineData(TicketStatus.Closed)]
+    public void AssignTo_WhenTicketIsResolvedOrClosed_ThrowsBusinessRuleViolationException(TicketStatus terminalStatus)
+    {
+        var ticket = new TicketBuilder().WithStatus(terminalStatus).AssignedTo(1).Build();
+
+        var exception = Assert.Throws<BusinessRuleViolationException>(() => ticket.AssignTo(2, Later));
+
+        Assert.Contains(terminalStatus.ToString(), exception.Message);
+        Assert.Contains("cannot be reassigned", exception.Message);
+    }
 }
