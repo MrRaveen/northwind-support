@@ -55,12 +55,10 @@ public sealed class TicketBuilder
             customerId: 1,
             categoryId: 1,
             _priority,
+            forcesCriticalPriority: false,
+            dueAtUtc: null,
+            assignedAgentId: _assignedAgentId,
             FixedClock.DefaultNow);
-
-        if (_assignedAgentId is not null)
-        {
-            ticket.AssignTo(_assignedAgentId, FixedClock.DefaultNow);
-        }
 
         if (_status != TicketStatus.New)
         {
