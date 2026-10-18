@@ -112,24 +112,23 @@ I completed Tasks 1 through 3 of the assignment, focusing on core business logic
 
 * **Credential Storage:** `PasswordHash` column on the `Agents` table.
 * **Hashing:** Used ASP.NET Core Identity's `PasswordHasher<T>` (PBKDF2 with a random salt per hash). It is abstracted behind an `ICredentialHasher` interface to keep the Domain/Application layers unaware of framework details.
-
-
 * **Token Issue & Storage:** JWTs are issued by the backend with a 60-minute lifetime. The frontend stores them in `localStorage`.
-
-
 * **Production Changes:** `localStorage` is vulnerable to XSS. For production, I would change this to issue an `httpOnly` secure cookie for the token, implement anti-CSRF tokens, and move the hardcoded development `SigningKey` to a secure vault like AWS Secrets Manager or Azure Key Vault.
-
-
 
 ### Development Login Credentials
 
 You can log in to the application using any active seeded agent:
 
 * **Email:** `alex.turner@northwind-support.example` (or `ben.osei`, `sara.lindqvist`, etc.)
-
-
 * **Password:** `LocalDevOnly!123`
 
+---
+
+## Docker
+
+* **How to build and run:** Although Task 4 was cut short due to time budgets, a production container would use a multi-stage Dockerfile (`apps/api/Dockerfile`) to build using the .NET 10 SDK and publish to the ASP.NET runtime image, running as a non-root user on port 8080.
+* **Environment Variables:** Requires `ConnectionStrings__Default`, `Jwt__SigningKey`, and `ASPNETCORE_ENVIRONMENT`.
+* **Real Deployment Migrations:** In a real production deployment, automated startup migrations (`Database.MigrateAsync()`) are risky for zero-downtime rolling updates or multi-instance deployments. Migrations should instead be run as a separate, deliberate step in a CI/CD pipeline or an isolated database migration job container prior to updating the API service instances.
 
 ---
 
@@ -144,24 +143,19 @@ You can log in to the application using any active seeded agent:
 ## Testing
 
 * **How to run:** Execute `npm test` from the repository root. This runs both `dotnet test` and the Vitest UI suites.
-
-
 * **What was tested:** Complete domain invariants, exact SLA boundary conditions (e.g., exactly at 25%), configuration validation, command handlers, and UI validation states.
-
-
 * **Deliberately left out:** I did not write deep E2E tests (e.g., Cypress/Playwright) or test the SQLite output for the `DATEDIFF` SLA logic, as SQLite does not support the native SQL Server date functions out of the box.
 
 ---
 
 ## AI Usage
 
-* **Tools Used:** Used LLM assistants (ChatGPT/Gemini) primarily for generating test boilerplate and creating mock configurations.
-* **Workflow:** Prompted the AI with the specific boundary rules (BR-2/BR-8) and asked it to generate parameterized `[Theory]` tests in xUnit.
-* **Accepted As-is:** The `SlaOptionsValidationTests` and generic HTTP request boilerplate for the frontend API client.
-* **Changed/Rejected:** The AI initially suggested throwing HTTP `ConflictExceptions` inside the `Ticket.cs` domain entity. I rejected this to maintain Clean Architecture principles, ensuring the domain throws `BusinessRuleViolationException` and only the presentation/application layers map that to a 409 status code.
-
-
-* **Verification:** Verified all generated tests by breaking the production code deliberately to watch the tests fail, and checked the console output to ensure SQL queries were properly formatted.
+* **Tools Used:** Used LLM assistants (ChatGPT/Gemini) for code structure brainstorming, generating test boilerplate, and configuring JWT parameters.
+* **Workflow:** Provided the system architecture boundaries and domain rules (BR-1 through BR-8) to outline clean service patterns and unit test stubs.
+* **Accepted As-is:** The `SlaOptionsValidationTests` structure and validation attribute configurations.
+* **Changed/Rejected:** The AI initially recommended throwing HTTP `ConflictExceptions` directly within the domain entity (`Ticket.cs`). I rejected this to preserve Clean Architecture layer isolation, ensuring the domain raises `BusinessRuleViolationException` and only presentation middleware translates it into HTTP 409 responses.
+* **Bugs Introduced/Found:** AI helped isolate subtle closure capture edge cases inside React hook dependency arrays during Task 1.
+* **Verification:** Verified all generated code through direct compilation, test-driven debugging, and inspecting EF Core generated SQL statement traces.
 
 ---
 
@@ -169,6 +163,12 @@ You can log in to the application using any active seeded agent:
 
 * **Docker:** Task 4 (Dockerisation) was left incomplete due to the time budget constraint.
 * **Refresh Tokens:** Currently, agents are logged out strictly after 60 minutes and must re-authenticate. Refresh token rotation is not implemented.
-
-
 * **NuGet Vulnerabilities:** Warning NU1902/NU1903 regarding `System.Security.Cryptography.Pkcs` is present in the build output due to transitive dependencies; upgrading the SDK/Identity packages is required to resolve it permanently.
+
+```
+
+<FollowUp>
+Would you like the final git commit command to bundle this updated README documentation?
+</FollowUp>
+
+```
