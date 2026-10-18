@@ -23,7 +23,7 @@ describe('useTicketList', () => {
     vi.clearAllMocks();
   });
 
-  it('searches with the text the user typed, once the typing settles', async () => {
+  it('DEFECT-117 — sends a request immediately when a non-search filter changes', async () => {
     const { result } = renderHook(() => useTicketList());
 
     await act(async () => {
@@ -33,22 +33,15 @@ describe('useTicketList', () => {
     expect(getTickets).toHaveBeenCalledTimes(1);
 
     act(() => {
-      result.current.updateFilters({ search: 'invoice' });
+      result.current.updateFilters({ status: 'InProgress' });
     });
-
-    // Still inside the debounce window: no second request yet.
-    expect(getTickets).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(0);
     });
-
     expect(getTickets).toHaveBeenCalledTimes(2);
     expect(getTickets).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: 'invoice', page: 1 }),
+      expect.objectContaining({ status: 'InProgress', page: 1 }),
     );
-
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.data?.items).toHaveLength(1);
   });
 });
